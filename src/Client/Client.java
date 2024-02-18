@@ -5,26 +5,22 @@ import java.io.IOException;
 import java.io.InputStreamReader;
 import java.io.PrintWriter;
 import java.net.Socket;
-
-import Server.Login;
-import Server.Signup;
+import org.json.simple.JSONObject;
+import org.json.simple.parser.JSONParser;
+import org.json.simple.parser.ParseException;
 
 public class Client {
 
-	private static BufferedReader in; // 서버로부터의 입력 스트림
-	private static PrintWriter out; // 서버로의 출력 스트림
+	// 서버 주소와 포트 번호 설정
+	private static final String serverAddress = "localhost";
+	private static final int serverPort = 9999;
 
 	public static void main(String[] args) {
-		final String serverAddress = "localhost"; // 서버의 주소
-		final int serverPort = 9999; // 서버의 포트 번호
-
-		try ( // 소켓서버연결과 입출력
-				Socket socket = new Socket(serverAddress, serverPort);
+		try (Socket socket = new Socket(serverAddress, serverPort);
 				PrintWriter out = new PrintWriter(socket.getOutputStream(), true);
 				BufferedReader in = new BufferedReader(new InputStreamReader(socket.getInputStream()));
 				BufferedReader stdIn = new BufferedReader(new InputStreamReader(System.in))) {
-
-			// 사용자 입력받기 전에 일정 시간 동안 대기하는 스레드 슬립 적용
+			System.out.println("사이렌오더 서버에 연결되었습니다.");
 
 			try {
 				Thread.sleep(1000);
@@ -33,91 +29,108 @@ public class Client {
 				e.printStackTrace();
 			}
 
-			System.out.println("사이렌오더 서버에 연결되었습니다.");
-
-			String userInput;
+			// 사용자 입력을 통해 로그인, 회원가입, 종료 중 하나를 선택할 수 있는 메뉴 반복
 			while (true) {
-				// 메뉴출력
-				System.out.println("1.     [   로그인  ]     ");
-				System.out.println("2.     [  회원가입  ]     ");
-				System.out.println("3.     [   종료    ]     ");
-				System.out.println("      메뉴를 선택하세요. >>  ");
-
-				// 사용자 입력받기
-				userInput = stdIn.readLine();
-
+				displayMenu();
+				String userInput = stdIn.readLine();
 				switch (userInput) {
-
 				case "1":
-					login(stdIn, out, in); // 로그인 호출
+					login(stdIn, out, in); // 로그인 처리
 					break;
 				case "2":
-					signup(stdIn, out, in); // 회원가입 호출
+					signup(stdIn, out, in); // 회원가입 처리
 					break;
 				case "3":
-					System.out.println("사이렌오더 서버 연결을 종료합니다.");
+					System.out.println("사이렌오더 서버 연결을 종료합니다."); // 프로그램 종료
 					return;
 				default:
-					System.out.println("잘못된 입력입니다. 다시 선택해주세요.");
+					System.out.println("잘못된 입력입니다. 다시 선택해주세요."); // 잘못된 입력 처리
 				}
-
 			}
 		} catch (IOException e) {
-			e.printStackTrace();
+			System.out.println("서버 연결에 실패했습니다: " + e.getMessage()); // 서버 연결 실패 처리
 		}
 	}
 
-	// 로그인 기능 호출
+	// 사용자에게 메뉴 옵션을 표시하는 메서드
+	private static void displayMenu() {
+		System.out.println("1. [로그인]");
+		System.out.println("2. [회원가입]");
+		System.out.println("3. [종료]");
+		System.out.println("메뉴를 선택하세요. >> ");
+	}
+
+	// 로그인 기능을 처리하는 메서드
 	private static void login(BufferedReader stdIn, PrintWriter out, BufferedReader in) throws IOException {
-		// 사용자 입력 정보 받기
-		System.out.println("아이디를 입력하세요>>");
-		String userid = stdIn.readLine();
-		System.out.println("패스워드를 입력하세요>>");
-		String password = stdIn.readLine();
-			
-		//로그인 요청 서버로 전송
-		out.println("[LOGIN"+userid + "," +password);
-		
-		//서버로부터 응답받기
-		String response = in.readLine();
-		System.out.println(response);
-		}
+		JSONObject json = new JSONObject();
+		json.put("type", "login");
+		json.put("userid", promptForInput(stdIn, "아이디를 입력하세요>>"));
+		json.put("password", promptForInput(stdIn, "패스워드를 입력하세요>>"));
+		out.println(json.toString());
+		handleServerResponse(in, stdIn, out); // 서버로부터의 응답 처리
 
-	// 회원가입 기능 호출
-	private static void signup(BufferedReader stdIn, PrintWriter out, BufferedReader in) throws IOException {
-		// 사용자 입력 정보 받기
-		System.out.println("사용할 아이디를 입력하세요");
-		String userid = stdIn.readLine();
-		
-		while(alreadyId(in, out, userid)) {
-		System.out.println("이미 사용중인 아이디입니다. 다른 아이디를 입력하세요.");
-		userid = stdIn.readLine(); // 사용자로부터 다른 아이디 입력 요청
-		}
-		System.out.println("사용할 패스워드를 입력하세요");
-		String password = stdIn.readLine();
-		}
-			
-	// 이미 사용 중인 아이디 확인하는 메서드
-	private static boolean alreadyId(BufferedReader in, PrintWriter out, String userid) {
-
-		try {
-			Thread.sleep(1000);
-		} catch (InterruptedException e) {
-			// TODO Auto-generated catch block
-			e.printStackTrace();
-		}
-
-		// 서버로부터 이미 사용 중인 아이디인지 확인하는 메시지 전송
-		out.println("[CheckID]" + userid);
-
-		// 서버로부터 응답받기
-		String response;
-		try {
-			response = in.readLine();
-			return response.equals("true"); // 이미 사용 중인 아이디인 경우 true 반환
-		} catch (IOException e) {
-			e.printStackTrace();
-		}
-		return false;
+		handleLoginSuccess(stdIn, out);
 	}
+
+	// 회원가입 기능을 처리하는 메서드
+	private static void signup(BufferedReader stdIn, PrintWriter out, BufferedReader in) throws IOException {
+		JSONObject json = new JSONObject();
+		json.put("type", "signup");
+		json.put("userid", promptForInput(stdIn, "사용할 아이디를 입력하세요"));
+		json.put("password", promptForInput(stdIn, "사용할 패스워드를 입력하세요"));
+		out.println(json.toString());
+		handleServerResponse(in, stdIn, out); // 서버로부터의 응답 처리
+	}
+
+	// 사용자로부터 입력을 요청하는 메서드
+	private static String promptForInput(BufferedReader stdIn, String prompt) throws IOException {
+		System.out.println(prompt);
+		return stdIn.readLine();
+	}
+
+	private static void handleServerResponse(BufferedReader in, BufferedReader stdIn, PrintWriter out)
+			throws IOException {
+		JSONParser parser = new JSONParser();
+		try {
+			JSONObject response = (JSONObject) parser.parse(in.readLine());
+			// System.out.println(response.get("message")); // 응답 메시지 출력
+			System.out.println(response.toJSONString());
+
+		} catch (ParseException e) {
+			System.out.println("서버로부터 응답을 받는 중 오류가 발생했습니다: " + e.getMessage());
+		}
+	}
+
+	private static void handleLoginSuccess(BufferedReader stdIn, PrintWriter out) throws IOException {
+		boolean keepRunning = true;
+		while (keepRunning) {
+			displayPostLoginMenu(); // 로그인 성공 후 메뉴 표시
+			String userInput = stdIn.readLine(); // 사용자 입력 받기
+			switch (userInput) {
+			case "1":
+				orderCoffee(stdIn, out); // 커피 주문 처리
+				break;
+			case "2":
+				enterChatRoom(stdIn, out); // 채팅방 이동 처리
+				break;
+			case "3":
+				System.out.println("서비스를 종료합니다.");
+				keepRunning = false; // 반복문 종료
+				break;
+			default:
+				System.out.println("잘못된 입력입니다. 다시 선택해주세요.");
+				break;
+			}
+		}
+	}
+
+	private static void displayPostLoginMenu() {
+		System.out.println("\n로그인에 성공했습니다.");
+		System.out.println("1. 커피 주문");
+		System.out.println("2. 채팅방 이동");
+		System.out.println("3. 종료");
+		System.out.println("메뉴를 선택하세요. >> ");
+
+	}
+
 }
